@@ -1,0 +1,92 @@
+import imaplib
+import email
+import os
+from email.header import decode_header
+from datetime import datetime, timedelta
+
+# Initialize debugging information
+print("Starting the email fetching process...")
+
+# Create Gmail_Data folder if it doesn't exist
+folder_name = "Gmail_Data"
+if not os.path.exists(folder_name):
+    os.makedirs(folder_name)
+
+# Connect to email server
+print("Connecting to IMAP server...")
+imap = imaplib.IMAP4_SSL("imap.gmail.com")
+print("Connected to IMAP server.")
+
+# Login
+print("Logging into email account...")
+imap.login("your_email@example.com", "your_password")
+print("Successfully logged in.")
+
+# Select mailbox
+print("Selecting inbox...")
+imap.select("inbox")
+print("Inbox selected.")
+
+# Calculate date 8 months ago and convert to string
+date_eight_months_ago = (datetime.now() - timedelta(days=8*30)).strftime("%d-%b-%Y")
+print(f"Fetching emails since {date_eight_months_ago}...")
+
+# Search for all emails since date_eight_months_ago
+status, messages = imap.search(None, f'(SINCE {date_eight_months_ago})')
+if status == 'OK':
+    print(f"Search complete. Number of emails found: {len(messages[0].split())}")
+else:
+    print("Search failed.")
+    exit()
+
+# Process each email
+email_ids = messages[0].split()
+for email_id in email_ids:
+    print(f"Fetching email ID: {email_id.decode('utf-8')}...")
+    status, msg_data = imap.fetch(email_id, "(RFC822)")
+    raw_email = msg_data[0][1]
+
+    # Parse email
+    print("Parsing email...")
+    msg = email.message_from_bytes(raw_email)
+    print("Email parsed.")
+
+    # Look for attachments (inside the email processing loop)
+    print("Looking for attachments...")
+    if msg.is_multipart():
+        for part in msg.walk():
+            filename = part.get_filename()
+            if not filename:
+                print("No filename found for this part. Skipping...")
+                continue
+
+            # Decode MIME-encoded filename
+            header, encoding = decode_header(filename)[0]
+            if encoding:
+                try:
+                    decoded_filename = header.decode(encoding)
+                except Exception as e:
+                    print(f"Error decoding filename: {filename}. Exception: {e}. Using original filename as fallback...")
+                    decoded_filename = filename
+            else:
+                decoded_filename = header
+
+            # Check for invalid characters in filename and sanitize
+            invalid_chars = set('<>:\"/\\|?*')
+            sanitized_filename = ''.join(c if c not in invalid_chars else '_' for c in decoded_filename)
+
+            # Check if the payload is valid
+            payload = part.get_payload(decode=True)
+            if not payload:
+                print(f"Attachment {sanitized_filename} has no data. Skipping...")
+                continue
+
+            filepath = os.path.join(folder_name, sanitized_filename)
+            print(f"Found attachment: {sanitized_filename}. Downloading to {filepath}...")
+            with open(filepath, "wb") as f:
+                f.write(payload)
+            print(f"Attachment downloaded to {filepath}.")
+    else:
+        print("This email is not multipart. Skipping...")
+
+print("Email fetching process completed.")
