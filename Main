@@ -90,3 +90,55 @@ for email_id in email_ids:
         print("This email is not multipart. Skipping...")
 
 print("Email fetching process completed.")
+
+!pip install pdf2image
+!pip install pytesseract
+
+import os
+from pdf2image import convert_from_path
+import pytesseract
+
+# Define the path to the Gmail_Data folder and the PDF file
+pdf_folder = "Gmail_Data"
+pdf_filename = "1012787.pdf"
+pdf_path = os.path.join(pdf_folder, pdf_filename)
+
+# Path to poppler's bin directory
+poppler_bin_path = "C:\\Users\\Shiloh\\Downloads\\Release-23.08.0-0\\poppler-23.08.0\\Library\\bin"
+
+# Convert the PDF to images
+pages = convert_from_path(pdf_path, dpi=300, poppler_path=poppler_bin_path)
+
+# Extract text from each image
+extracted_texts = []
+for page in pages:
+    text = pytesseract.image_to_string(page)
+    extracted_texts.append(text)
+
+# Join the extracted texts
+ocr_output = "\n".join(extracted_texts)
+
+#print(complete_text)
+
+!pip install openai
+
+import openai
+
+# Define your OpenAI API key here
+api_key = "Your API"
+
+# Initialize the OpenAI client
+openai.api_key = api_key
+
+# Define the prompt for GPT-3. We will use the OCR output as part of the prompt.
+prompt_text = f"Extract from the following invoice data: {ocr_output} the total amount of the invoice, the WK ending date, and the names of the employees that worked there may be repeated names if so just send one reply per unique name."
+
+# Call the Completion API
+response = openai.Completion.create(
+    engine="text-davinci-003",
+    prompt=prompt_text,
+    max_tokens=150
+)
+
+# Print the response from GPT-3
+print(response.choices[0].text.strip())
